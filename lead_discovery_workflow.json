@@ -1,0 +1,138 @@
+{
+  "name": "Lead Discovery Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://your-backend-api.com/companies",
+        "options": {
+          "responseFormat": "json"
+        }
+      },
+      "name": "Get Companies",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "1",
+          "name": "Backend API Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const company = item.json;\n  return {\n    json: {\n      companyId: company.id,\n      domain: company.website || company.name.toLowerCase().replace(/\\s+/g, '') + '.com'\n    }\n  };\n});"
+      },
+      "name": "Extract Domain",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.hunter.io/v2/domain-search",
+        "options": {
+          "responseFormat": "json"
+        },
+        "queryParameters": [
+          {
+            "name": "domain",
+            "value": "={{$node['Extract Domain'].json.domain}}"
+          },
+          {
+            "name": "api_key",
+            "value": "your-hunter-io-api-key"
+          }
+        ]
+      },
+      "name": "Hunter.io Enrichment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://your-backend-api.com/leads",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "companyId",
+              "value": "={{$node['Extract Domain'].json.companyId}}"
+            },
+            {
+              "name": "contacts",
+              "value": "={{$node['Hunter.io Enrichment'].json.data.emails}}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json"
+        }
+      },
+      "name": "Post Enriched Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1120, 300],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "1",
+          "name": "Backend API Auth"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Companies": {
+      "main": [
+        [
+          {
+            "node": "Extract Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Domain": {
+      "main": [
+        [
+          {
+            "node": "Hunter.io Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter.io Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Post Enriched Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
